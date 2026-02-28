@@ -1,0 +1,30 @@
+apiVersion: v2
+name: ai-todo
+description: AI Todo Chatbot - Full-stack Kubernetes deployment with Next.js frontend, FastAPI backend, and Cohere AI integration
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - ai-todo
+  - chatbot
+  - nextjs
+  - fastapi
+  - cohere
+  - kubernetes
+  - helm
+maintainers:
+  - name: AI Todo Team
+    email: team@ai-todo.local
+dependencies:
+  - name: frontend
+    version: 0.1.0
+    repository: "file://charts/frontend"
+    condition: frontend.enabled
+  - name: backend
+    version: 0.1.0
+    repository: "file://charts/backend"
+    condition: backend.enabled
+  - name: database
+    version: 0.1.0
+    repository: "file://charts/database"
+    condition: database.enabled

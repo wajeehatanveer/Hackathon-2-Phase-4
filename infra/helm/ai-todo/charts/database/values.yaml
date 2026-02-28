@@ -1,0 +1,19 @@
+# Database subchart values
+# NOTE: This is a placeholder chart for external Neon PostgreSQL
+# The actual database connection is managed via Kubernetes Secrets
+# containing the DATABASE_URL connection string
+
+nameOverride: database
+fullnameOverride: ""
+
+# External database configuration
+external:
+  enabled: true
+  type: postgresql
+  provider: neon
+  # Connection details are provided via secrets:
+  # - DATABASE_URL in ai-todo-secrets Secret
+
+# This chart does not deploy any resources
+# It exists to maintain the umbrella chart structure
+# and document the external database dependency

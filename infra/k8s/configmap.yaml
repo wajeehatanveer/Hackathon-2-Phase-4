@@ -1,0 +1,15 @@
+---
+# AI Todo Chatbot - ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ai-todo-config
+  namespace: default
+  labels:
+    app.kubernetes.io/name: ai-todo
+    app.kubernetes.io/component: config
+data:
+  NODE_ENV: production
+  PYTHONUNBUFFERED: "1"
+  LOG_LEVEL: info
+  PORT: "8000"

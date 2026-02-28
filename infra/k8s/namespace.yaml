@@ -1,0 +1,9 @@
+---
+# AI Todo Chatbot - Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ai-todo
+  labels:
+    app.kubernetes.io/name: ai-todo
+    app.kubernetes.io/part-of: ai-todo

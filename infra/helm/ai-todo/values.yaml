@@ -1,0 +1,254 @@
+# Global configuration for AI Todo Chatbot Helm chart
+# These values apply across all subcharts unless overridden
+
+global:
+  # Image registry (leave empty for local/docker hub)
+  imageRegistry: ""
+  # Image pull policy for all containers
+  imagePullPolicy: IfNotPresent
+  # Common labels applied to all resources
+  commonLabels:
+    app.kubernetes.io/part-of: ai-todo
+    app.kubernetes.io/managed-by: helm
+  # Storage class for any persistent volumes
+  storageClass: ""
+
+# Frontend subchart configuration
+frontend:
+  enabled: true
+  nameOverride: frontend
+  fullnameOverride: ""
+  
+  # Replica count
+  replicas: 2
+  
+  # Container image configuration
+  image:
+    repository: ai-todo-frontend
+    tag: latest
+    pullPolicy: IfNotPresent
+  
+  # Resource requests and limits
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "0.25"
+    limits:
+      memory: "512Mi"
+      cpu: "0.5"
+  
+  # Health probe configuration
+  probes:
+    startup:
+      enabled: true
+      path: /health
+      port: 3000
+      initialDelaySeconds: 10
+      periodSeconds: 10
+      failureThreshold: 30
+    liveness:
+      enabled: true
+      path: /health
+      port: 3000
+      initialDelaySeconds: 30
+      periodSeconds: 30
+      failureThreshold: 3
+    readiness:
+      enabled: true
+      path: /health
+      port: 3000
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      failureThreshold: 3
+  
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 3000
+    targetPort: 3000
+  
+  # Horizontal Pod Autoscaler
+  hpa:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 80
+    targetMemoryUtilizationPercentage: 80
+  
+  # Environment variables (non-sensitive)
+  env:
+    NODE_ENV: production
+    PORT: "3000"
+  
+  # ConfigMap references
+  configMapRef:
+    name: ai-todo-config
+  
+  # Secret references
+  secretRef:
+    name: ai-todo-secrets
+
+# Backend subchart configuration
+backend:
+  enabled: true
+  nameOverride: backend
+  fullnameOverride: ""
+  
+  # Replica count
+  replicas: 2
+  
+  # Container image configuration
+  image:
+    repository: ai-todo-backend
+    tag: latest
+    pullPolicy: IfNotPresent
+  
+  # Resource requests and limits
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "0.5"
+    limits:
+      memory: "1Gi"
+      cpu: "1.0"
+  
+  # Health probe configuration
+  probes:
+    startup:
+      enabled: true
+      path: /health
+      port: 8000
+      initialDelaySeconds: 10
+      periodSeconds: 10
+      failureThreshold: 30
+    liveness:
+      enabled: true
+      path: /health
+      port: 8000
+      initialDelaySeconds: 30
+      periodSeconds: 30
+      failureThreshold: 3
+    readiness:
+      enabled: true
+      path: /health
+      port: 8000
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      failureThreshold: 3
+  
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 8000
+    targetPort: 8000
+  
+  # Horizontal Pod Autoscaler
+  hpa:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 80
+    targetMemoryUtilizationPercentage: 80
+  
+  # Environment variables (non-sensitive)
+  env:
+    PYTHONUNBUFFERED: "1"
+    PORT: "8000"
+  
+  # ConfigMap references
+  configMapRef:
+    name: ai-todo-config
+  
+  # Secret references (sensitive env vars)
+  secretRef:
+    name: ai-todo-secrets
+
+# Database subchart configuration
+# Note: This is a placeholder chart - actual database is external Neon PostgreSQL
+database:
+  enabled: true
+  nameOverride: database
+  fullnameOverride: ""
+  
+  # External database configuration
+  external:
+    enabled: true
+    # Database connection details should be provided via secrets
+    # DATABASE_URL secret contains the full connection string
+    type: postgresql
+    provider: neon
+
+# Ingress configuration (umbrella chart level)
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+  host: todo.local
+  tls: []
+  # Example TLS configuration:
+  # - secretName: ai-todo-tls
+  #   hosts:
+  #     - todo.local
+  
+  # Path-based routing
+  paths:
+    - path: /api
+      pathType: Prefix
+      backend:
+        service:
+          name: backend
+          port: 8000
+    - path: /
+      pathType: Prefix
+      backend:
+        service:
+          name: frontend
+          port: 3000
+
+# Secrets configuration
+# These will be created as Kubernetes Secrets
+secrets:
+  enabled: true
+  name: ai-todo-secrets
+  # Values should be provided at install time via --set or values override
+  # DO NOT commit actual secret values to version control
+  data: {}
+  # Example:
+  # BETTER_AUTH_SECRET: ""
+  # COHERE_API_KEY: ""
+  # DATABASE_URL: ""
+
+# ConfigMap configuration
+configMap:
+  enabled: true
+  name: ai-todo-config
+  data:
+    NODE_ENV: production
+    PYTHONUNBUFFERED: "1"
+    LOG_LEVEL: info
+
+# Service account configuration
+serviceAccount:
+  create: true
+  name: ai-todo-service-account
+  annotations: {}
+
+# Pod security context
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1001
+  runAsGroup: 1001
+  fsGroup: 1001
+
+# Container security context
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop:
+      - ALL
