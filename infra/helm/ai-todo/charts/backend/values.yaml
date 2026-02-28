@@ -1,0 +1,111 @@
+# Backend subchart values
+# These values can be overridden from the parent umbrella chart
+
+nameOverride: backend
+fullnameOverride: ""
+
+# Replica count
+replicas: 2
+
+# Container image configuration
+image:
+  repository: ai-todo-backend
+  tag: v3
+  pullPolicy: Never
+
+# Resource requests and limits
+resources:
+  requests:
+    memory: "512Mi"
+    cpu: "0.5"
+  limits:
+    memory: "1Gi"
+    cpu: "1.0"
+
+# Health probe configuration
+probes:
+  startup:
+    enabled: true
+    path: /health
+    port: 8000
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    failureThreshold: 30
+  liveness:
+    enabled: true
+    path: /health
+    port: 8000
+    initialDelaySeconds: 30
+    periodSeconds: 30
+    failureThreshold: 3
+  readiness:
+    enabled: true
+    path: /health
+    port: 8000
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    failureThreshold: 3
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 8000
+  targetPort: 8000
+  annotations: {}
+
+# Horizontal Pod Autoscaler
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+# Environment variables (non-sensitive)
+env:
+  PYTHONUNBUFFERED: "1"
+  PORT: "8000"
+  PYTHONPATH: "/app"
+
+# ConfigMap reference
+configMapRef:
+  name: ai-todo-config
+
+# Secret reference for sensitive env vars
+# Contains: BETTER_AUTH_SECRET, COHERE_API_KEY, DATABASE_URL
+secretRef:
+  name: ai-todo-secrets
+
+# Pod annotations
+podAnnotations: {}
+
+# Pod labels
+podLabels: {}
+
+# Node selector
+nodeSelector: {}
+
+# Tolerations
+tolerations: []
+
+# Affinity rules
+affinity: {}
+
+# Service account
+serviceAccount:
+  create: false
+  name: ""
+
+# Security context
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1001
+  runAsGroup: 1001
+  fsGroup: 1001
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop:
+      - ALL

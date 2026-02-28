@@ -1,0 +1,14 @@
+apiVersion: v2
+name: database
+description: Database subchart for AI Todo Chatbot - External Neon PostgreSQL
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - database
+  - postgresql
+  - neon
+  - external
+maintainers:
+  - name: AI Todo Team
+    email: team@ai-todo.local
