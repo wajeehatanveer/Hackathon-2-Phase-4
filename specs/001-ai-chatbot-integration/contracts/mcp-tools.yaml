@@ -1,0 +1,565 @@
+# MCP Tools Specification
+# Version: 1.0.0
+# 
+# This document defines the contract for all MCP tools used by the AI chatbot.
+# Each tool MUST be tested before implementation (Constitution Principle III).
+
+openapi: 3.1.0
+info:
+  title: MCP Tools for AI Todo Chatbot
+  description: |
+    Model Context Protocol (MCP) tools for conversational task management.
+    
+    These tools are invoked by the Cohere AI reasoning layer after parsing
+    natural language input. All tools enforce user isolation via user_id parameter.
+  version: 1.0.0
+
+tags:
+  - name: Task Management
+    description: Core task CRUD operations
+  - name: User Context
+    description: User identity and session queries
+
+components:
+  schemas:
+    # Common Types
+    UUID:
+      type: string
+      format: uuid
+      description: Universally Unique Identifier
+      example: "550e8400-e29b-41d4-a716-446655440000"
+    
+    Priority:
+      type: string
+      enum: [low, medium, high]
+      description: Task priority level
+      example: "high"
+    
+    TaskStatus:
+      type: string
+      enum: [pending, completed]
+      description: Task completion status
+      example: "pending"
+    
+    DateTime:
+      type: string
+      format: date-time
+      description: ISO 8601 datetime
+      example: "2026-02-21T14:00:00Z"
+    
+    Date:
+      type: string
+      format: date
+      description: ISO 8601 date (YYYY-MM-DD)
+      example: "2026-02-21"
+
+    # Tool: add_task
+    AddTaskRequest:
+      type: object
+      required:
+        - user_id
+        - title
+      properties:
+        user_id:
+          $ref: '#/components/schemas/UUID'
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Task title
+          example: "Review project proposal"
+        description:
+          type: string
+          maxLength: 1000
+          description: Optional task description
+          example: "Review the Q1 project proposal document"
+        priority:
+          $ref: '#/components/schemas/Priority'
+          default: medium
+        due_date:
+          $ref: '#/components/schemas/Date'
+          description: Optional due date
+    
+    AddTaskResponse:
+      type: object
+      required:
+        - task_id
+        - title
+        - status
+      properties:
+        task_id:
+          $ref: '#/components/schemas/UUID'
+        title:
+          type: string
+        status:
+          type: string
+          enum: [created]
+    
+    AddTaskError:
+      type: object
+      properties:
+        error:
+          type: string
+          enum: [ValidationError, DatabaseError, AuthenticationError]
+        message:
+          type: string
+
+    # Tool: delete_task
+    DeleteTaskRequest:
+      type: object
+      required:
+        - user_id
+        - task_id
+      properties:
+        user_id:
+          $ref: '#/components/schemas/UUID'
+        task_id:
+          $ref: '#/components/schemas/UUID'
+    
+    DeleteTaskResponse:
+      type: object
+      required:
+        - success
+        - message
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+          example: "Task deleted successfully"
+    
+    DeleteTaskError:
+      type: object
+      properties:
+        error:
+          type: string
+          enum: [NotFoundError, AuthenticationError, DatabaseError]
+        message:
+          type: string
+
+    # Tool: update_task
+    UpdateTaskRequest:
+      type: object
+      required:
+        - user_id
+        - task_id
+        - updates
+      properties:
+        user_id:
+          $ref: '#/components/schemas/UUID'
+        task_id:
+          $ref: '#/components/schemas/UUID'
+        updates:
+          type: object
+          description: Fields to update (at least one required)
+          properties:
+            title:
+              type: string
+              minLength: 1
+              maxLength: 200
+            description:
+              type: string
+              maxLength: 1000
+            priority:
+              $ref: '#/components/schemas/Priority'
+            due_date:
+              $ref: '#/components/schemas/Date'
+          minProperties: 1
+    
+    UpdateTaskResponse:
+      type: object
+      required:
+        - task_id
+        - updated_fields
+      properties:
+        task_id:
+          $ref: '#/components/schemas/UUID'
+        updated_fields:
+          type: array
+          items:
+            type: string
+          example: ["priority", "due_date"]
+    
+    UpdateTaskError:
+      type: object
+      properties:
+        error:
+          type: string
+          enum: [NotFoundError, ValidationError, AuthenticationError]
+        message:
+          type: string
+
+    # Tool: mark_complete
+    MarkCompleteRequest:
+      type: object
+      required:
+        - user_id
+        - task_id
+        - completed
+      properties:
+        user_id:
+          $ref: '#/components/schemas/UUID'
+        task_id:
+          $ref: '#/components/schemas/UUID'
+        completed:
+          type: boolean
+          description: True to mark complete, false to reopen
+    
+    MarkCompleteResponse:
+      type: object
+      required:
+        - task_id
+        - completed
+      properties:
+        task_id:
+          $ref: '#/components/schemas/UUID'
+        completed:
+          type: boolean
+        completed_at:
+          $ref: '#/components/schemas/DateTime'
+          description: Timestamp when completed (null if reopened)
+    
+    MarkCompleteError:
+      type: object
+      properties:
+        error:
+          type: string
+          enum: [NotFoundError, AuthenticationError, DatabaseError]
+        message:
+          type: string
+
+    # Tool: list_tasks
+    ListTasksRequest:
+      type: object
+      required:
+        - user_id
+      properties:
+        user_id:
+          $ref: '#/components/schemas/UUID'
+        status:
+          $ref: '#/components/schemas/TaskStatus'
+          description: Filter by status (optional)
+        priority:
+          $ref: '#/components/schemas/Priority'
+          description: Filter by priority (optional)
+        due_date:
+          $ref: '#/components/schemas/Date'
+          description: Filter by specific due date (optional)
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 50
+          description: Maximum number of tasks to return
+    
+    ListTasksResponse:
+      type: object
+      required:
+        - tasks
+        - count
+      properties:
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaskSummary'
+        count:
+          type: integer
+          description: Total number of tasks returned
+    
+    TaskSummary:
+      type: object
+      required:
+        - task_id
+        - title
+        - status
+      properties:
+        task_id:
+          $ref: '#/components/schemas/UUID'
+        title:
+          type: string
+        status:
+          $ref: '#/components/schemas/TaskStatus'
+        priority:
+          $ref: '#/components/schemas/Priority'
+        due_date:
+          $ref: '#/components/schemas/Date'
+        completed_at:
+          $ref: '#/components/schemas/DateTime'
+    
+    ListTasksError:
+      type: object
+      properties:
+        error:
+          type: string
+          enum: [AuthenticationError, DatabaseError]
+        message:
+          type: string
+
+    # Tool: get_current_user
+    GetCurrentUserRequest:
+      type: object
+      required:
+        - user_id
+      properties:
+        user_id:
+          $ref: '#/components/schemas/UUID'
+    
+    GetCurrentUserResponse:
+      type: object
+      required:
+        - user_id
+        - email
+      properties:
+        user_id:
+          $ref: '#/components/schemas/UUID'
+        email:
+          type: string
+          format: email
+        created_at:
+          $ref: '#/components/schemas/DateTime'
+    
+    GetCurrentUserError:
+      type: object
+      properties:
+        error:
+          type: string
+          enum: [AuthenticationError, NotFoundError]
+        message:
+          type: string
+
+x-mcp-tools:
+  # =============================================================================
+  # TOOL 1: add_task
+  # =============================================================================
+  add_task:
+    name: add_task
+    description: |
+      Create a new task for the authenticated user.
+      
+      Use this tool when the user wants to:
+      - Add a new task or todo item
+      - Create a reminder
+      - Schedule something for later
+      
+      Extract title from the user's request. Infer due_date if a date is mentioned.
+      Default priority to "medium" unless specified.
+    inputSchema:
+      $ref: '#/components/schemas/AddTaskRequest'
+    outputSchema:
+      oneOf:
+        - $ref: '#/components/schemas/AddTaskResponse'
+        - $ref: '#/components/schemas/AddTaskError'
+    examples:
+      - description: Create task with due date
+        input:
+          user_id: "550e8400-e29b-41d4-a716-446655440000"
+          title: "Review project proposal"
+          due_date: "2026-02-21"
+          priority: "high"
+        output:
+          task_id: "660f9511-f3ac-52e5-b827-557766551111"
+          title: "Review project proposal"
+          status: "created"
+      - description: Create simple task
+        input:
+          user_id: "550e8400-e29b-41d4-a716-446655440000"
+          title: "Buy groceries"
+        output:
+          task_id: "770g0622-g4bd-63f6-c938-668877662222"
+          title: "Buy groceries"
+          status: "created"
+
+  # =============================================================================
+  # TOOL 2: delete_task
+  # =============================================================================
+  delete_task:
+    name: delete_task
+    description: |
+      Delete a task permanently.
+      
+      Use this tool when the user wants to:
+      - Remove a task from their list
+      - Delete an unwanted reminder
+      
+      IMPORTANT: Always confirm with the user before calling this tool.
+      Show the task details and ask for explicit confirmation.
+    inputSchema:
+      $ref: '#/components/schemas/DeleteTaskRequest'
+    outputSchema:
+      oneOf:
+        - $ref: '#/components/schemas/DeleteTaskResponse'
+        - $ref: '#/components/schemas/DeleteTaskError'
+    examples:
+      - description: Delete existing task
+        input:
+          user_id: "550e8400-e29b-41d4-a716-446655440000"
+          task_id: "660f9511-f3ac-52e5-b827-557766551111"
+        output:
+          success: true
+          message: "Task deleted successfully"
+      - description: Delete non-existent task
+        input:
+          user_id: "550e8400-e29b-41d4-a716-446655440000"
+          task_id: "00000000-0000-0000-0000-000000000000"
+        output:
+          error: "NotFoundError"
+          message: "Task not found"
+
+  # =============================================================================
+  # TOOL 3: update_task
+  # =============================================================================
+  update_task:
+    name: update_task
+    description: |
+      Update an existing task's attributes.
+      
+      Use this tool when the user wants to:
+      - Change a task's title or description
+      - Modify the due date or time
+      - Change the priority level
+      
+      Only include fields that need to be updated in the 'updates' object.
+    inputSchema:
+      $ref: '#/components/schemas/UpdateTaskRequest'
+    outputSchema:
+      oneOf:
+        - $ref: '#/components/schemas/UpdateTaskResponse'
+        - $ref: '#/components/schemas/UpdateTaskError'
+    examples:
+      - description: Update priority
+        input:
+          user_id: "550e8400-e29b-41d4-a716-446655440000"
+          task_id: "660f9511-f3ac-52e5-b827-557766551111"
+          updates:
+            priority: "high"
+        output:
+          task_id: "660f9511-f3ac-52e5-b827-557766551111"
+          updated_fields: ["priority"]
+      - description: Update due date
+        input:
+          user_id: "550e8400-e29b-41d4-a716-446655440000"
+          task_id: "660f9511-f3ac-52e5-b827-557766551111"
+          updates:
+            due_date: "2026-02-28"
+        output:
+          task_id: "660f9511-f3ac-52e5-b827-557766551111"
+          updated_fields: ["due_date"]
+
+  # =============================================================================
+  # TOOL 4: mark_complete
+  # =============================================================================
+  mark_complete:
+    name: mark_complete
+    description: |
+      Mark a task as completed or reopen a completed task.
+      
+      Use this tool when the user wants to:
+      - Mark a task as done/finished/complete
+      - Reopen a previously completed task
+      
+      Set completed=true to mark as done, completed=false to reopen.
+    inputSchema:
+      $ref: '#/components/schemas/MarkCompleteRequest'
+    outputSchema:
+      oneOf:
+        - $ref: '#/components/schemas/MarkCompleteResponse'
+        - $ref: '#/components/schemas/MarkCompleteError'
+    examples:
+      - description: Mark task complete
+        input:
+          user_id: "550e8400-e29b-41d4-a716-446655440000"
+          task_id: "660f9511-f3ac-52e5-b827-557766551111"
+          completed: true
+        output:
+          task_id: "660f9511-f3ac-52e5-b827-557766551111"
+          completed: true
+          completed_at: "2026-02-17T10:30:00Z"
+      - description: Reopen task
+        input:
+          user_id: "550e8400-e29b-41d4-a716-446655440000"
+          task_id: "660f9511-f3ac-52e5-b827-557766551111"
+          completed: false
+        output:
+          task_id: "660f9511-f3ac-52e5-b827-557766551111"
+          completed: false
+          completed_at: null
+
+  # =============================================================================
+  # TOOL 5: list_tasks
+  # =============================================================================
+  list_tasks:
+    name: list_tasks
+    description: |
+      List tasks with optional filtering.
+      
+      Use this tool when the user wants to:
+      - See their tasks
+      - View pending/completed tasks
+      - Filter by priority or due date
+      
+      Default limit is 50 tasks. Apply filters based on user's request.
+    inputSchema:
+      $ref: '#/components/schemas/ListTasksRequest'
+    outputSchema:
+      oneOf:
+        - $ref: '#/components/schemas/ListTasksResponse'
+        - $ref: '#/components/schemas/ListTasksError'
+    examples:
+      - description: List all pending tasks
+        input:
+          user_id: "550e8400-e29b-41d4-a716-446655440000"
+          status: "pending"
+          limit: 50
+        output:
+          tasks:
+            - task_id: "660f9511-f3ac-52e5-b827-557766551111"
+              title: "Review project proposal"
+              status: "pending"
+              priority: "high"
+              due_date: "2026-02-21"
+            - task_id: "770g0622-g4bd-63f6-c938-668877662222"
+              title: "Buy groceries"
+              status: "pending"
+              priority: "medium"
+          count: 2
+      - description: List high priority tasks
+        input:
+          user_id: "550e8400-e29b-41d4-a716-446655440000"
+          priority: "high"
+        output:
+          tasks:
+            - task_id: "660f9511-f3ac-52e5-b827-557766551111"
+              title: "Review project proposal"
+              status: "pending"
+              priority: "high"
+              due_date: "2026-02-21"
+          count: 1
+
+  # =============================================================================
+  # TOOL 6: get_current_user
+  # =============================================================================
+  get_current_user:
+    name: get_current_user
+    description: |
+      Get the current authenticated user's information.
+      
+      Use this tool when the user asks:
+      - "Who am I?"
+      - "What email am I logged in with?"
+      - "Show my account info"
+      
+      Returns the user's email and account details from the JWT payload.
+    inputSchema:
+      $ref: '#/components/schemas/GetCurrentUserRequest'
+    outputSchema:
+      oneOf:
+        - $ref: '#/components/schemas/GetCurrentUserResponse'
+        - $ref: '#/components/schemas/GetCurrentUserError'
+    examples:
+      - description: Get current user
+        input:
+          user_id: "550e8400-e29b-41d4-a716-446655440000"
+        output:
+          user_id: "550e8400-e29b-41d4-a716-446655440000"
+          email: "user@example.com"
+          created_at: "2026-01-01T00:00:00Z"

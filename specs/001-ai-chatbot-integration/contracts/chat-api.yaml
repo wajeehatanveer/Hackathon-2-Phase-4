@@ -1,0 +1,289 @@
+openapi: 3.1.0
+info:
+  title: AI Todo Chatbot API
+  description: |
+    Conversational chat interface for natural language task management.
+    
+    This endpoint interprets natural language input, executes appropriate MCP tools,
+    and returns contextual responses. All operations are scoped to the authenticated user.
+  version: 1.0.0
+  contact:
+    name: Hackathon Team
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:8000
+    description: Local development server
+  - url: https://api.todo-chatbot.example.com
+    description: Production server
+
+tags:
+  - name: Chat
+    description: Conversational task management interface
+
+paths:
+  /api/{user_id}/chat:
+    post:
+      operationId: chat
+      summary: Chat with AI Todo Assistant
+      description: |
+        Send a natural language message to the chatbot. The AI will:
+        1. Parse the message to identify intent
+        2. Execute appropriate MCP tools (add_task, list_tasks, etc.)
+        3. Return a natural language response
+        
+        Supports multi-turn conversations with context retention when
+        conversation_id is provided.
+      tags:
+        - Chat
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Authenticated user's UUID (extracted from JWT)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatRequest'
+            examples:
+              create_task:
+                summary: Create a new task
+                value:
+                  message: "Add a task to review project proposal by Friday"
+              list_tasks:
+                summary: List pending tasks
+                value:
+                  message: "Show me my pending tasks"
+              with_conversation:
+                summary: Continue existing conversation
+                value:
+                  message: "Also mark that dentist task as complete"
+                  conversation_id: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '200':
+          description: Successful chat response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatResponse'
+              examples:
+                task_created:
+                  summary: Task created successfully
+                  value:
+                    conversation_id: "550e8400-e29b-41d4-a716-446655440000"
+                    message: "I've added 'Review project proposal' to your tasks for Friday!"
+                    tool_calls:
+                      - tool: add_task
+                        result:
+                          task_id: "660f9511-f3ac-52e5-b827-557766551111"
+                          status: created
+                task_list:
+                  summary: Task list returned
+                  value:
+                    conversation_id: "550e8400-e29b-41d4-a716-446655440000"
+                    message: "You have 3 pending tasks:\n\n1. **Review project proposal** - Due: Friday\n2. **Call dentist** - Due: Tomorrow at 2pm\n3. **Buy groceries** - No due date"
+                    tool_calls:
+                      - tool: list_tasks
+                        result:
+                          tasks:
+                            - task_id: "660f9511-f3ac-52e5-b827-557766551111"
+                              title: "Review project proposal"
+                              status: pending
+                              due_date: "2026-02-21"
+                identity_query:
+                  summary: User identity query
+                  value:
+                    conversation_id: "550e8400-e29b-41d4-a716-446655440000"
+                    message: "You are logged in as user@example.com"
+                    tool_calls:
+                      - tool: get_current_user
+                        result:
+                          user_id: "550e8400-e29b-41d4-a716-446655440000"
+                          email: "user@example.com"
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                empty_message:
+                  summary: Empty message
+                  value:
+                    error: "Message cannot be empty"
+                    code: "INVALID_REQUEST"
+        '401':
+          description: Unauthorized - Invalid or missing JWT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                unauthorized:
+                  summary: Authentication required
+                  value:
+                    error: "Invalid or expired token"
+                    code: "UNAUTHORIZED"
+        '403':
+          description: Forbidden - User ID mismatch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                forbidden:
+                  summary: User ID mismatch
+                  value:
+                    error: "User ID in path does not match JWT subject"
+                    code: "FORBIDDEN"
+        '404':
+          description: Conversation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                not_found:
+                  summary: Conversation not found
+                  value:
+                    error: "Conversation not found"
+                    code: "NOT_FOUND"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                cohere_error:
+                  summary: Cohere API error
+                  value:
+                    error: "AI service temporarily unavailable. Please try again."
+                    code: "AI_SERVICE_ERROR"
+                database_error:
+                  summary: Database error
+                  value:
+                    error: "Failed to save message. Please try again."
+                    code: "DATABASE_ERROR"
+      security:
+        - BearerAuth: []
+      x-rate-limit:
+        requests: 100
+        period: 1 minute
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token from Better Auth authentication
+
+  schemas:
+    ChatRequest:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          minLength: 1
+          maxLength: 1000
+          description: Natural language message from user
+          example: "Add a task to review the proposal by Friday"
+        conversation_id:
+          type: string
+          format: uuid
+          description: |
+            Optional conversation ID for multi-turn conversations.
+            If not provided, a new conversation is created.
+          example: "550e8400-e29b-41d4-a716-446655440000"
+    
+    ChatResponse:
+      type: object
+      required:
+        - conversation_id
+        - message
+      properties:
+        conversation_id:
+          type: string
+          format: uuid
+          description: Conversation ID (new or existing)
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        message:
+          type: string
+          description: Natural language response from assistant (markdown supported)
+          example: "I've added 'Review project proposal' to your tasks for Friday!"
+        tool_calls:
+          type: array
+          items:
+            $ref: '#/components/schemas/ToolCallResult'
+          description: Optional list of tool calls executed (for debugging)
+    
+    ToolCallResult:
+      type: object
+      required:
+        - tool
+        - result
+      properties:
+        tool:
+          type: string
+          enum:
+            - add_task
+            - delete_task
+            - update_task
+            - mark_complete
+            - list_tasks
+            - get_current_user
+          description: Name of the MCP tool executed
+        result:
+          type: object
+          description: Tool execution result (varies by tool)
+          additionalProperties: true
+    
+    Error:
+      type: object
+      required:
+        - error
+        - code
+      properties:
+        error:
+          type: string
+          description: Human-readable error message
+          example: "Invalid or expired token"
+        code:
+          type: string
+          description: Machine-readable error code
+          example: "UNAUTHORIZED"
+        details:
+          type: object
+          description: Optional additional error details
+          additionalProperties: true
+
+  responses:
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    
+    Forbidden:
+      description: Access denied
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
